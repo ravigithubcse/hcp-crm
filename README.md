@@ -12,37 +12,60 @@ As a life science expert designing for field reps, this system solves a real pai
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                React Frontend (Redux)                │
-│  ┌──────────────┐ ┌──────────────┐ ┌─────────────┐  │
-│  │ Log Screen   │ │  History     │ │  AI Tools   │  │
-│  │ (Form+Chat)  │ │  (CRUD)      │ │  (5 Tools)  │  │
-│  └──────────────┘ └──────────────┘ └─────────────┘  │
-└───────────────────────┬─────────────────────────────┘
-                        │ REST API (axios)
-┌───────────────────────▼─────────────────────────────┐
-│              FastAPI Backend (Python)                │
-│  /api/v1/interactions  /api/v1/hcps  /api/v1/agent  │
-└───────────────────────┬─────────────────────────────┘
-                        │
-        ┌───────────────┴────────────────┐
-        │                                │
-┌───────▼───────┐              ┌─────────▼──────────┐
-│   SQLite/     │              │  LangGraph Agent   │
-│   PostgreSQL  │              │  (gemma2-9b-it)    │
-│   Database    │              │  ┌──────────────┐  │
-└───────────────┘              │  │ 5 Tools:     │  │
-                               │  │ 1. log_inter │  │
-                               │  │ 2. edit_int  │  │
-                               │  │ 3. hcp_prof  │  │
-                               │  │ 4. followup  │  │
-                               │  │ 5. pre_brief │  │
-                               │  └──────────────┘  │
-                               │  Groq API (LLM)    │
-                               └────────────────────┘
+```mermaid
+flowchart TB
+    Client["🌐 React 18 + Redux
+Log Screen · History · AI Tools"]
+
+    subgraph BE["🐍 FastAPI Backend  (Python)"]
+        B1["POST /api/v1/interactions"]
+        B2["GET  /api/v1/hcps"]
+        B3["POST /api/v1/agent"]
+    end
+
+    subgraph AGENT["🤖 LangGraph Agent  (gemma2-9b-it via Groq)"]
+        direction LR
+        T1["📝 log_interaction"]
+        T2["✏️ edit_interaction"]
+        T3["👨‍⚕️ get_hcp_profile"]
+        T4["📅 schedule_followup"]
+        T5["📋 pre_call_brief"]
+    end
+
+    subgraph DATA["🗄️ Database"]
+        D1["🗃️ SQLite / PostgreSQL"]
+        D2["📋 Interactions"]
+        D3["👥 HCP Profiles"]
+        D4["✅ Follow-ups"]
+    end
+
+    Client <-->|REST / axios| BE
+    BE --> AGENT
+    AGENT --> T1 & T2 & T3 & T4 & T5
+    T1 & T2 & T3 & T4 & T5 <--> DATA
+    D1 --- D2 & D3 & D4
+
+    classDef client fill:#0d47a1,stroke:#42a5f5,color:#e3f2fd
+    classDef be fill:#1b5e20,stroke:#66bb6a,color:#e8f5e9
+    classDef agent fill:#4a148c,stroke:#ba68c8,color:#f3e5f5
+    classDef data fill:#3e2723,stroke:#ff8a65,color:#fbe9e7
+    class Client client
+    class B1,B2,B3 be
+    class T1,T2,T3,T4,T5 agent
+    class D1,D2,D3,D4 data
 ```
 
+**Request Flow:**
+1. **React 18 SPA** presents three views: interaction log form, history CRUD, and AI agent chat
+2. Axios calls hit **FastAPI** endpoints for interaction logging, HCP retrieval, and agent invocation
+3. **LangGraph** orchestrates a stateful agent graph using `gemma2-9b-it` via the Groq API
+4. **log_interaction** extracts entities (HCP name, sentiment, topics) via LLM and persists to the DB
+5. **get_hcp_profile** aggregates full interaction history and computes sentiment trend analysis
+6. **schedule_followup** creates linked follow-up tasks with due dates for next visits and material sends
+7. **pre_call_brief** generates a relationship summary and talking-point recommendations before each visit
+8. All interaction state is persisted to **SQLite** (dev) / **PostgreSQL** (prod) for full audit trails
+
+---
 ## 🤖 LangGraph Agent & 5 Tools
 
 The LangGraph agent orchestrates HCP interaction management through a state machine:
